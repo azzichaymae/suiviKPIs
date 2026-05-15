@@ -1,0 +1,196 @@
+import pandas as pd
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.shortcuts import render
+from xhtml2pdf import pisa
+import io
+import matplotlib.pyplot as plt
+import base64
+import re
+from datetime import datetime
+
+def extract_date_from_filename(filename):
+    # Try to match YYYYMMDD or DD-MM-YYYY patterns
+    match = re.search(r'(\d{4})(\d{2})(\d{2})', filename)  # e.g. 20250220
+    if match:
+        year, month, day = match.groups()
+        return datetime(int(year), int(month), int(day)).strftime("%d/%m/%Y")
+
+    match = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename)  # e.g. 20-02-2025
+    if match:
+        day, month, year = match.groups()
+        return datetime(int(year), int(month), int(day)).strftime("%d/%m/%Y")
+
+    return None
+
+def parse_total_time(value):
+    """Convert hh:mm string into decimal hours."""
+    if pd.isna(value):
+        return 0
+    if isinstance(value, str):
+        h, m = map(int, value.split(":"))
+        return h + m/60
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return value.hour + value.minute/60
+    return 0
+
+def format_french_date(date_str):
+    if not date_str:
+        return ""
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    months = {
+        1: "Jan", 2: "Fév", 3: "Mar", 4: "Avr", 5: "Mai", 6: "Juin",
+        7: "Juil", 8: "Août", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Déc"
+    }
+    return f"{dt.day} {months[dt.month]} {str(dt.year)[2:]}" 
+
+def upload_excel(request):
+    reporter_stats, bog_stats, zone_stats, employee_stats = {}, {}, {}, {}
+    histogram_base64 = None
+
+    if request.method == "POST":
+        Sdate = request.POST.get("date_from")
+        Edate = request.POST.get("date_to")
+        departement = request.POST.get("departement")
+        vpc_file = request.FILES.get("file_vpc")
+        bog_file = request.FILES.get("file_bog")
+        overdue_file = request.FILES.get("overdue_file")
+        std_file = request.FILES.get("std_file")
+
+        # --- VPC/CVPC ---
+        if vpc_file:
+            df_vpc = pd.read_excel(vpc_file)
+            df_vpc.columns = df_vpc.columns.str.strip()
+            df_vpc["ReporterName"] = df_vpc["VPC rapporté par"].str.split(",").str[0:2].str.join(",")
+
+            for reporter in df_vpc["ReporterName"].unique():
+                sub_df = df_vpc[df_vpc["ReporterName"] == reporter]
+                vpc_count = (sub_df["Type de VPC effectué"] == "Axé sur le sujet").sum()
+                cvpc_count = (sub_df["Type de VPC effectué"] == "Critical VPC").sum()
+                reporter_stats[reporter] = {"VPC": vpc_count, "cVPC": cvpc_count}
+
+        # --- BOG ---
+        if bog_file:
+            bog_filename = bog_file.name
+            extraction_date = extract_date_from_filename(bog_filename)
+            df_bog = pd.read_excel(bog_file)
+            df_bog.columns = df_bog.columns.str.strip()
+            df_bog = df_bog[df_bog["TourValidStatus"] == "valid"]
+
+            df_bog["TotalHours"] = df_bog["TotalTime"].apply(parse_total_time)
+
+            bog_stats = df_bog.groupby("User")["TotalHours"].sum().to_dict()
+
+            df_bog["ZoneNumber"] = df_bog["Zone"].str.extract(r'(\d+)').astype(int)
+            zone_stats = dict(sorted(df_bog.groupby("ZoneNumber")["TotalHours"].sum().to_dict().items()))
+
+                        # --- Create histogram ---
+            plt.figure(figsize=(6,4))
+
+            zone_labels = [f"Zone {z}" for z in zone_stats.keys()]
+            zone_values = list(zone_stats.values())
+
+            # Excel-like bar style
+            plt.bar(zone_labels, zone_values, color="#4472c4", width=0.4, edgecolor="#4472c4")
+
+            # Titles and labels
+            plt.title("Nombre d'heures passées dans chaque zone", fontsize=12)
+            plt.xlabel("")
+            plt.ylabel("")
+            plt.xticks(rotation=45, ha="right", fontsize=10)
+            plt.yticks(fontsize=10)
+
+            # Add gridlines similar to Excel
+            plt.grid(axis="y", color="#d9d9d9", linestyle="-", linewidth=0.8)
+
+            # Remove top and right borders
+            for spine in ["top", "right"]:
+                plt.gca().spines[spine].set_visible(False)
+
+            plt.tight_layout()
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format="png")
+            buf.seek(0)
+            histogram_base64 = base64.b64encode(buf.read()).decode("utf-8")
+            buf.close()
+
+
+        # --- Overdue Actions ---
+        if overdue_file:
+            df_overdue = pd.read_excel(overdue_file)
+            df_overdue.columns = df_overdue.columns.str.strip()
+
+            # Clean employee names
+            df_overdue["Employee"] = df_overdue["Assigned To"].str.split(",").str[0:2].apply(
+                lambda x: " ".join([p.strip() for p in x if p.strip()])
+            )
+
+            # Build dictionary: { employee: [ { "summary": ..., "priority": ... }, ... ] }
+            employee_actions = {}
+
+            for _, row in df_overdue.iterrows():
+                emp = row["Employee"]
+                summary = row["Action Summary"]
+                priority = row["Priority"]
+
+                if emp not in employee_actions:
+                    employee_actions[emp] = []
+                
+                employee_actions[emp].append({"summary": summary, "priority": priority})
+        
+        if std_file:
+            df_std = pd.read_excel(std_file)
+            df_std.columns = df_std.columns.str.strip()
+
+            # Extract full name from "Rapporté par"
+            df_std["Rapporté_par_nom"] = df_std["Rapporté par"].str.split(",").str[0:2].str.join(" ").str.strip()
+
+            # Extract full name from "Actions" (the 4th element in the comma split is the name)
+            df_std["Assigné_nom"] = (
+                df_std["Actions"]
+                .fillna("")                     # replace NaN with empty string
+                .str.split(",")
+                .str[2:4]
+                .str.join(" ")
+                .str.strip()
+            )
+            print(df_std[ "Assigné_nom"])
+
+            # Group by employee
+            grouped = {}
+            for _, row in df_std.iterrows():
+                emp = row["Rapporté_par_nom"]
+                if emp not in grouped:
+                    grouped[emp] = []
+                grouped[emp].append({
+                    "description": row["Description du danger"],
+                    "assigned_to": row["Assigné_nom"],
+                    "status": row["Statut"]
+                })
+            print(grouped)
+    
+            
+        # --- Render PDF ---
+        html_string = render_to_string("report.html", {
+            "reporter_stats": reporter_stats,
+            "bog_stats": bog_stats,
+            "zone_stats": zone_stats,
+            "employee_stats": employee_stats,
+            "employee_actions": employee_actions,
+            "histogram_base64": histogram_base64,
+            "extraction_date": extraction_date,
+            "Sdate": format_french_date(Sdate),
+            "Edate": format_french_date(Edate),
+            "departement": departement,
+            "grouped": grouped
+        })
+
+        pdf_buffer = io.BytesIO()
+        pisa.CreatePDF(html_string, dest=pdf_buffer)
+
+        response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = "attachment; filename=report.pdf"
+        return response
+
+    return render(request, "upload_form.html")

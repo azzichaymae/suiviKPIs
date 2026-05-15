@@ -1,0 +1,477 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <title>Rapport Hebdomadaire Maintenance - KPIs</title>
+    <style>
+      .red-value {
+  color: red;
+  font-weight: 600;
+}
+
+      /* RESET + COMPACT STYLES – tables plus petites */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", "Roboto", "Arial", sans-serif;
+        background: #eef2f5;
+        padding: 20px 20px;
+        margin: 0;
+      }
+      /* container principal pour PDF et affichage */
+      .report-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+        padding: 20px 24px 32px 24px;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 700;
+        color: #1e4663;
+        letter-spacing: 0.3px;
+        line-height: 1.2;
+      }
+      .title-main {
+        border-left: 5px solid #2c7da0;
+        padding-left: 14px;
+        margin-bottom: 12px;
+      }
+      .title-main h1:first-child {
+        margin-bottom: 2px;
+      }
+      .dept-date-card {
+        background-color: #daebf7;
+        border-radius: 12px;
+        padding: 40px 16px 20px 16px; /* top, right, bottom, left */
+        margin-top: 20px;
+      }
+
+      img {
+        display: block;
+        margin-bottom: 12px;
+      }
+      .report-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+        padding: 20px 24px 32px 24px;
+      }
+      .dept-date-item {
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 22px;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02);
+      }
+      .dept-date-item span.label {
+        color: #2c7da0;
+        font-weight: 600;
+        margin-right: 6px;
+      }
+
+.section-title {
+  font-size: 27px;
+  font-weight: 500;
+  color: #ffffff;
+  background: #0b436b;
+  border-radius: 24px;
+   outline: none;
+  border: none;
+  box-shadow: none;
+  margin-top: 15px;
+  padding: 6px 16px 2px 16px;  /* top right bottom left */
+line-height: 1.1;
+  }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border: none;
+        font-size: 12px;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 0 0 1px #e2e8f0;
+      }
+      tr:nth-child(even) td {
+        background-color: #fafcfe;
+      }
+      .vpc-table td:first-child {
+        text-align: left;
+        font-weight: 500;
+        background-color: #d0e4f4;
+      }
+      .vpc-table td:not-first-child {
+        font-weight: 500;
+        font-size: 11.5px;
+        background-color: #dee7ef;
+         
+        text-align: center;
+        font-size: 11.5px;
+      }
+      .vpc-table th {
+        background-color: #2c7da0;
+        color: white;
+        font-weight: 600;
+      }
+      .zone-header th {
+        background-color: #2c7da0;
+        padding: 6px 8px;
+        font-size: 11.5px;
+      }
+      .numeric-cell {
+        font-weight: 500;
+        font-size: 11.5px;
+      }
+      /* Section 2: Olive green table */
+      .bog-table td:first-child {
+        text-align: left;
+        font-weight: 500;
+        /* background-color: #556b2f; */
+        background-color: #b5c99a;
+      }
+      .bog-table td:not-first-child {
+        font-weight: 500;
+        font-size: 11.5px;
+        background-color: #cbd9b8;
+        
+        text-align: center;
+        font-size: 11.5px;
+      }
+      .bog-table th {
+        background-color: #556b2f; /* olive green */
+        color: white;
+        font-weight: 600;
+      }
+      .overdue-table td:first-child {
+        text-align: left;
+        font-weight: 500;
+        background-color: #fff8b5;
+        width: 20%;
+      }
+      .overdue-table td:not-first-child {
+        font-weight: 500;
+         background-color: #fffbe0;
+        border-bottom: #282727 0.5px solid;
+       
+      }
+     
+      .overdue-table th {
+        background-color: #ddcf50;
+        color: #282727;
+        font-weight: 600;
+      }
+       
+       .sd_table_td{
+        background-color: #d9d9d9;
+       }
+       .spantd {
+        text-align: left;
+        font-weight: 500;
+        /* background-color: #556b2f; */
+        background-color: #a6a6a6;
+      }
+      .sd_table th {
+        background-color: #737373; /* olive green */
+        color: white;
+        font-weight: 600;
+      }
+
+
+      .histogram-box {
+        margin-top: 12px;
+        background: #fefefe;
+        border-radius: 16px;
+        padding: 12px 12px 10px 12px;
+        border: 1px solid #e2edf2;
+        text-align: center;
+      }
+      .histogram-caption {
+        font-size: 11px;
+        color: #4a627a;
+        margin-bottom: 10px;
+        font-style: italic;
+        background: #f5f9fc;
+        padding: 4px 10px;
+        border-radius: 20px;
+        display: inline-block;
+      }
+
+      .footer-note {
+        margin-top: 28px;
+        font-size: 9px;
+        text-align: right;
+        color: #6c86a3;
+        border-top: 1px solid #cfdfea;
+        padding-top: 12px;
+      }
+      @media print {
+        body {
+          background: white;
+          padding: 0;
+          margin: 0;
+        }
+        .report-container {
+          box-shadow: none;
+          padding: 8px 10px;
+          max-width: 100%;
+        }
+        th,
+        td {
+          padding: 2px 4px;
+        }
+      }
+
+      .badge-info {
+        font-size: 10px;
+      }
+      h2 {
+        font-size: 14px;
+        padding-left: 4px;
+        margin-bottom: 6px;
+        color: #2c5a74;
+      }
+  li{
+  font-size: 11px;
+   
+  font-weight:lighter ;
+  }
+  .Elevé{
+  color: rgb(250, 92, 48);
+  font-weight: 600;
+  }
+  .Moyen{
+  color: rgb(255, 153, 0);
+  font-weight: 600;
+  }
+  .Urgent{
+  color: rgb(255, 55, 0);
+     
+  font-weight: 600;
+  }
+    </style>
+  </head>
+  <body>
+    <div class="report-container">
+      <img
+        src="C:\Users\azzic\HEP\reports\templates\Screenshot 2026-04-27 085916.png"
+      />
+
+      <div class="dept-date-card">
+        <div style="height: 40px"></div>
+        <div class="dept-date-item">
+          <span class="label">Département :</span> <span style="font-weight: lighter;">{{ departement }}</span>
+        </div>
+        <div class="dept-date-item">
+          <span class="label">Date :</span><span style="font-weight: lighter"> {{ Sdate }} - {{ Edate }}</span>
+        </div>
+       </div>
+
+      <div class="section">
+        <div class="section-title" >VPC / CVPC</div>
+        <div class="compact-table-wrapper">
+          <table class="vpc-table">
+            <thead>
+              <tr>
+                <th>NOM</th>
+                <th>VPC</th>
+                <th>CVPC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for name, stats in reporter_stats.items %}
+              <tr>
+                <td style="text-align: left">{{ name }}</td>
+<td class="numeric-cell {% if stats.VPC == 0 %}red-value{% endif %}">
+  {{ stats.VPC|default:0 }}
+</td>
+<td class="numeric-cell {% if stats.cVPC == 0 %}red-value{% endif %}">
+  {{ stats.cVPC|default:0 }}
+</td>
+
+
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="3" style="text-align: center">
+                  Aucune donnée VPC/CVPC disponible
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECTION 2 : BOG Totaux par technicien (heures toutes zones) -->
+      <div class="section">
+        <div class="section-title">BOG</div>
+        <h2>BOG – Total heures par agent</h2>
+        <div class="compact-table-wrapper">
+          <table class="bog-table">
+            <thead>
+              <tr>
+                <th>NOM</th>
+                <th>TOTAL HEURES</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for user, total in bog_stats.items %}
+              <tr>
+                <td style="text-align: left">{{ user }}</td>
+                <td class="numeric-cell">{{ total|floatformat:2 }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="2">Aucune donnée BOG individuelle</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <h2>BOG – Heures par zone</h2>
+        <div class="section">
+          <div
+            style="
+              font-size: 14px;
+              padding-left: 4px;
+              margin-bottom: 6px;
+              color: #2c5a74;
+            "
+          >
+            {% if extraction_date %} Extraction du {{ extraction_date }} {% else%} Répartition horaire par zone {% endif %}
+          </div>
+          <!-- Tableau des zones au format horizontal (compact) -->
+          <div class="compact-table-wrapper">
+            <table class="zone-table">
+              <thead>
+                <tr class="zone-header">
+                  <th>Zone</th>
+                  {% for zone_label, _ in zone_stats.items %}
+                  <th>Zone {{ zone_label }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight: 700; background: #eef3f8">Heures</td>
+                  {% for zone_label, total in zone_stats.items %}
+                  <td class="numeric-cell">{{ total|floatformat:2 }}</td>
+                  {% endfor %}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Histogramme généré (si fourni) -->
+          {% if histogram_base64 %}
+          <div class="histogram-box">
+            <div class="histogram-caption">
+              Histogramme : heures par zone (période)
+            </div>
+            <img
+              src="data:image/png;base64,{{ histogram_base64 }}"
+              alt="Histogramme des heures par zone - maintenance"
+            />
+          </div>
+          {% else %}
+          <div
+            class="histogram-box"
+            style="background: #f8fafc; font-size: 11px; color: #66809a"
+          >
+            Aucun graphique disponible pour l'intervalle sélectionné.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- SECTION 4 : Actions en Retard par Employé (criticité) -->
+      <div class="section">
+  <div class="section-title">Actions Overdue</div>
+  <div class="compact-table-wrapper">
+    <table class="overdue-table">
+      <thead>
+        <tr>
+          <th style="width: 20%;">Employé</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for employee, actions in employee_actions.items %}
+        <tr>
+          <td style="text-align: left; font-weight: 600;">{{ employee }}</td>
+          <td>
+            <ul style="margin: 0; padding-left: 16px; font-size: 11.5px;">
+              {% for act in actions %}
+                <li>
+                  <span> {{ act.summary }} </span>
+                  <span class="{{act.priority}}" style=" font-weight:500;">({{ act.priority }})</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="2" style="text-align: center">
+            Aucune action en retard enregistrée
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+        <div class="section-title" >Situations dangereuses</div>
+        <div class="compact-table-wrapper">
+<table class="sd_table">
+  <thead >
+    <tr style="text-align: left;">
+      <th>Employé</th>
+      <th>Description du danger</th>
+      <th>Assigné à</th>
+      <th>Statut</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for employee, dangers in grouped.items %}
+      {% for danger in dangers %}
+      <tr {% if forloop.last %} style="border-bottom: 0.5px solid #ffffff;" {% endif %}>          {% if forloop.first %}
+            <!-- Merge employee cell across all rows -->
+            <td style="width: 20%;" rowspan="{{ dangers|length }}" class="spantd">
+              {{ employee }} <br>
+            </td>
+          {% endif %}
+          <td class="sd_table_td" style="width: 50%;">{{ danger.description }}</td>
+          <td class="sd_table_td" style="width: 20%;">{%if danger.assigned_to == "" %}Non assigné{% else %}{{ danger.assigned_to }}{% endif %}</td>
+          <td class="sd_table_td" style="width: 10%;">
+            <span >
+              {{ danger.status }}
+            </span>
+          </td>
+        </tr>
+      {% endfor %}
+    {% empty %}
+      <tr>
+        <td colspan="4" class="text-center">Aucune situation dangereuse enregistrée</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+        </div>
+      </div>
+
+    </div>
+  </body>
+</html>
