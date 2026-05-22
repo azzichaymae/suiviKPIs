@@ -268,7 +268,7 @@ line-height: 1.1;
 
       <div class="dept-date-card">
         <div style="height: 40px"></div>
-        <div class="dept-date-item">
+        <div class="dept-date-item" >
           <span class="label">Département :</span> <span style="font-weight: lighter;">{{ departement }}</span>
         </div>
         <div class="dept-date-item">
@@ -453,7 +453,7 @@ line-height: 1.1;
               {{ employee }} <br>
             </td>
           {% endif %}
-          <td class="sd_table_td" style="width: 50%;">{{ danger.description }}</td>
+          <td class="sd_table_td" style="width: 50%;">{%if danger.description  == "" %}Sans description{% else %}{{ danger.description }}{% endif %}</td>
           <td class="sd_table_td" style="width: 20%;">{%if danger.assigned_to == "" %}Non assigné{% else %}{{ danger.assigned_to }}{% endif %}</td>
           <td class="sd_table_td" style="width: 10%;">
             <span >

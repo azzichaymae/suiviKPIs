@@ -44,7 +44,26 @@ def format_french_date(date_str):
     }
     return f"{dt.day} {months[dt.month]} {str(dt.year)[2:]}" 
 
+def validate_required_columns(df, file_label, required_cols, ignore_cols=None):
+    """
+    Validate only the required columns in a DataFrame.
+    Returns a list of alerts if empty cells are found.
+    """
+    if ignore_cols is None:
+        ignore_cols = []
+
+    alerts = []
+    for idx, row in df.iterrows():
+        for col in required_cols:
+            if col not in ignore_cols:
+                val = row[col] if col in df.columns else None
+                if pd.isna(val) or str(val).strip() == "":
+                    alerts.append(f"⚠️ {file_label} : Champ vide dans la colonne '{col}' (ligne {idx+2})")
+    return alerts
+
 def upload_excel(request):
+    alerts = []
+
     reporter_stats, bog_stats, zone_stats, employee_stats = {}, {}, {}, {}
     histogram_base64 = None
 
@@ -61,6 +80,7 @@ def upload_excel(request):
         if vpc_file:
             df_vpc = pd.read_excel(vpc_file)
             df_vpc.columns = df_vpc.columns.str.strip()
+            alerts.extend(validate_required_columns(df_vpc, "VPC", ["VPC rapporté par", "Type de VPC effectué"]))
             df_vpc["ReporterName"] = df_vpc["VPC rapporté par"].str.split(",").str[0:2].str.join(",")
 
             for reporter in df_vpc["ReporterName"].unique():
@@ -75,6 +95,7 @@ def upload_excel(request):
             extraction_date = extract_date_from_filename(bog_filename)
             df_bog = pd.read_excel(bog_file)
             df_bog.columns = df_bog.columns.str.strip()
+            alerts.extend(validate_required_columns(df_bog, "BOG", ["User", "TotalTime", "Zone", "TourValidStatus"]))
             df_bog = df_bog[df_bog["TourValidStatus"] == "valid"]
 
             df_bog["TotalHours"] = df_bog["TotalTime"].apply(parse_total_time)
@@ -120,6 +141,7 @@ def upload_excel(request):
         if overdue_file:
             df_overdue = pd.read_excel(overdue_file)
             df_overdue.columns = df_overdue.columns.str.strip()
+            alerts.extend(validate_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"]))
 
             # Clean employee names
             df_overdue["Employee"] = df_overdue["Assigned To"].str.split(",").str[0:2].apply(
@@ -142,7 +164,12 @@ def upload_excel(request):
         if std_file:
             df_std = pd.read_excel(std_file)
             df_std.columns = df_std.columns.str.strip()
-
+            alerts.extend(validate_required_columns(
+            df_std,
+            "STD",
+            ["Rapporté par", "Description du danger", "Statut"],
+            ignore_cols=["Assigné_nom"]  # allowed empty
+            ))
             # Extract full name from "Rapporté par"
             df_std["Rapporté_par_nom"] = df_std["Rapporté par"].str.split(",").str[0:2].str.join(" ").str.strip()
 
@@ -155,7 +182,6 @@ def upload_excel(request):
                 .str.join(" ")
                 .str.strip()
             )
-            print(df_std[ "Assigné_nom"])
 
             # Group by employee
             grouped = {}
@@ -163,34 +189,40 @@ def upload_excel(request):
                 emp = row["Rapporté_par_nom"]
                 if emp not in grouped:
                     grouped[emp] = []
+                desc = row["Description du danger"]
+                if pd.isna(desc):  
+                    desc = ""
+                    print(f"Warning: Missing description for employee {emp} in row {_}")
+                    
                 grouped[emp].append({
-                    "description": row["Description du danger"],
+                    "description": desc,
                     "assigned_to": row["Assigné_nom"],
                     "status": row["Statut"]
                 })
-            print(grouped)
-    
-            
-        # --- Render PDF ---
-        html_string = render_to_string("report.html", {
-            "reporter_stats": reporter_stats,
-            "bog_stats": bog_stats,
-            "zone_stats": zone_stats,
-            "employee_stats": employee_stats,
-            "employee_actions": employee_actions,
-            "histogram_base64": histogram_base64,
-            "extraction_date": extraction_date,
-            "Sdate": format_french_date(Sdate),
-            "Edate": format_french_date(Edate),
-            "departement": departement,
-            "grouped": grouped
-        })
+     
+        if alerts:
+            # Render an error page instead of PDF
+            return render(request, "upload_form.html", {"alerts": alerts})
+        else:
+            html_string = render_to_string("report.html", {
+                "reporter_stats": reporter_stats,
+                "bog_stats": bog_stats,
+                "zone_stats": zone_stats,
+                "employee_stats": employee_stats,
+                "employee_actions": employee_actions,
+                "histogram_base64": histogram_base64,
+                "extraction_date": extraction_date,
+                "Sdate": format_french_date(Sdate),
+                "Edate": format_french_date(Edate),
+                "departement": departement,
+                "grouped": grouped
+            })
 
-        pdf_buffer = io.BytesIO()
-        pisa.CreatePDF(html_string, dest=pdf_buffer)
+            pdf_buffer = io.BytesIO()
+            pisa.CreatePDF(html_string, dest=pdf_buffer)
 
-        response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
-        response["Content-Disposition"] = "attachment; filename=report.pdf"
+            response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
+            response["Content-Disposition"] = "attachment; filename=suivi hebdomadaire.pdf"
         return response
 
     return render(request, "upload_form.html")

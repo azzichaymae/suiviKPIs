@@ -121,7 +121,29 @@
     <div class="header">
       <h1>Suivi hebdomadaire des KPIs</h1>
     </div>
-    <div class="content">
+    
+    {% if alerts %}
+ <div style="background:#ffe0e0; padding:10px; border:1px solid #cc0000; margin:20px; border-radius:6px;">
+<div style="display:flex; justify-content:space-between; align-items:center; background:#f8d7da; padding:12px 10px;">
+    <h4 style="color:#a94442; font-weight:500; margin:0;">🔴 ANOMALIES DÉTECTÉES ({{ alerts|length }})</h4>
+    <a style="color:#a94442; font-weight:600; cursor:pointer;" href="{% url 'upload_excel' %}" >Corriger</a>
+  </div>  <ul style="list-style-type:none; margin-left: 20px;">
+    {% for alert in alerts %}
+      <li>{{ alert }}</li>
+    {% endfor %}
+  </ul>
+  <!-- Back button -->
+  <!-- <div style="margin-top:15px;">
+    <a href="{% url 'upload_excel' %}" 
+       style="display:inline-block;   color:#2c3e50; 
+              border-radius:6px; text-decoration:none; font-weight:600;">
+      Retour
+    </a>
+  </div> -->
+</div>
+
+{% else %}
+<div class="content">
       <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="form-row">
@@ -137,9 +159,12 @@
             <label for="department">Département:</label>
             <select name="departement" id="departement" required>
               <option value="">-- Sélectionnez une département --</option>
+                            <option value="Global">Global</option>
+
               <option value="Production">Production</option>
               <option value="Maintenance">Maintenance</option>
               <option value="Securité">Securité</option>
+              <option value="Securité">Qualité</option>
             </select>
           </div>
         </div>
@@ -163,6 +188,7 @@
         </div>
       </form>
     </div>
+    {% endif %}
   </div>
 </body>
 </html>
