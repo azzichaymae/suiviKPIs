@@ -10,13 +10,12 @@ import re
 from datetime import datetime
 
 def extract_date_from_filename(filename):
-    # Try to match YYYYMMDD or DD-MM-YYYY patterns
-    match = re.search(r'(\d{4})(\d{2})(\d{2})', filename)  # e.g. 20250220
+    match = re.search(r'(\d{4})(\d{2})(\d{2})', filename) 
     if match:
         year, month, day = match.groups()
         return datetime(int(year), int(month), int(day)).strftime("%d/%m/%Y")
 
-    match = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename)  # e.g. 20-02-2025
+    match = re.search(r'(\d{2})-(\d{2})-(\d{4})', filename) 
     if match:
         day, month, year = match.groups()
         return datetime(int(year), int(month), int(day)).strftime("%d/%m/%Y")
@@ -24,7 +23,6 @@ def extract_date_from_filename(filename):
     return None
 
 def parse_total_time(value):
-    """Convert hh:mm string into decimal hours."""
     if pd.isna(value):
         return 0
     if isinstance(value, str):
@@ -45,10 +43,6 @@ def format_french_date(date_str):
     return f"{dt.day} {months[dt.month]} {str(dt.year)[2:]}" 
 
 def validate_required_columns(df, file_label, required_cols, ignore_cols=None):
-    """
-    Validate only the required columns in a DataFrame.
-    Returns a list of alerts if empty cells are found.
-    """
     if ignore_cols is None:
         ignore_cols = []
 
@@ -62,11 +56,6 @@ def validate_required_columns(df, file_label, required_cols, ignore_cols=None):
     return alerts
 
 def check_required_columns(df, file_label, required_cols):
-    """
-    Check if all required columns exist in the DataFrame.
-    Returns a list of error messages for missing columns.
-    If columns are missing, returns the errors and skips further processing.
-    """
     errors = []
     df_columns = [c.strip() for c in df.columns.tolist()]
     for col in required_cols:
@@ -92,7 +81,6 @@ def upload_excel(request):
         overdue_file = request.FILES.get("overdue_file")
         std_file = request.FILES.get("std_file")
 
-        # --- VPC/CVPC ---
         if vpc_file and vpc_file.name:
             df_vpc = pd.read_excel(vpc_file)
             df_vpc.columns = df_vpc.columns.str.strip()
@@ -111,14 +99,12 @@ def upload_excel(request):
                     cvpc_count = (sub_df["Type de VPC effectué"] == "Critical VPC").sum()
                     reporter_stats[reporter] = {"VPC": vpc_count, "cVPC": cvpc_count}
 
-        # --- BOG ---
         if bog_file and bog_file.name:
             bog_filename = bog_file.name
             extraction_date = extract_date_from_filename(bog_filename)
             df_bog = pd.read_excel(bog_file)
             df_bog.columns = df_bog.columns.str.strip()
 
-            # Check required columns exist first
             missing = check_required_columns(df_bog, "BOG", ["User", "TotalTime", "Zone", "TourValidStatus"])
             if missing:
                 alerts.extend(missing)
@@ -133,7 +119,6 @@ def upload_excel(request):
                 df_bog["ZoneNumber"] = df_bog["Zone"].str.extract(r'(\d+)').astype(int)
                 zone_stats = dict(sorted(df_bog.groupby("ZoneNumber")["TotalHours"].sum().to_dict().items()))
 
-                # --- Create histogram ---
                 plt.figure(figsize=(6,4))
 
                 zone_labels = [f"Zone {z}" for z in zone_stats.keys()]
@@ -142,7 +127,6 @@ def upload_excel(request):
                 # Excel-like bar style
                 plt.bar(zone_labels, zone_values, color="#4472c4", width=0.4, edgecolor="#4472c4")
 
-                # Titles and labels
                 plt.title("Nombre d\'heures passées dans chaque zone", fontsize=12)
                 plt.xlabel("")
                 plt.ylabel("")
@@ -165,24 +149,20 @@ def upload_excel(request):
                 buf.close()
 
 
-        # --- Overdue Actions ---
         if overdue_file and overdue_file.name:
             df_overdue = pd.read_excel(overdue_file)
             df_overdue.columns = df_overdue.columns.str.strip()
 
-            # Check required columns exist first
             missing = check_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"])
             if missing:
                 alerts.extend(missing)
             else:
                 alerts.extend(validate_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"]))
 
-                # Clean employee names
                 df_overdue["Employee"] = df_overdue["Assigned To"].str.split(",").str[0:2].apply(
                     lambda x: " ".join([p.strip() for p in x if p.strip()])
                 )
 
-                # Build dictionary: { employee: [ { "summary": ..., "priority": ... }, ... ] }
                 employee_actions = {}
 
                 for _, row in df_overdue.iterrows():
@@ -195,12 +175,10 @@ def upload_excel(request):
 
                     employee_actions[emp].append({"summary": summary, "priority": priority})
 
-        # --- STD (Situations Dangereuses) ---
         if std_file and std_file.name:
             df_std = pd.read_excel(std_file)
             df_std.columns = df_std.columns.str.strip()
 
-            # Check required columns exist first
             missing = check_required_columns(df_std, "STD", ["Rapporté par", "Description du danger", "Statut", "Actions"])
             if missing:
                 alerts.extend(missing)
@@ -212,10 +190,8 @@ def upload_excel(request):
                     ignore_cols=["Assigné_nom"]  # allowed empty
                 ))
 
-                # Extract full name from "Rapporté par"
                 df_std["Rapporté_par_nom"] = df_std["Rapporté par"].str.split(",").str[0:2].str.join(" ").str.strip()
 
-                # Extract full name from "Actions" (the 4th element in the comma split is the name)
                 df_std["Assigné_nom"] = (
                     df_std["Actions"]
                     .fillna("")                     # replace NaN with empty string
@@ -225,7 +201,6 @@ def upload_excel(request):
                     .str.strip()
                 )
 
-                # Group by employee
                 grouped = {}
                 for _, row in df_std.iterrows():
                     emp = row["Rapporté_par_nom"]
@@ -243,7 +218,6 @@ def upload_excel(request):
                     })
 
         if alerts:
-            # Render an error page instead of PDF
             return render(request, "upload_form.html", {"alerts": alerts})
         else:
             html_string = render_to_string("report.html", {

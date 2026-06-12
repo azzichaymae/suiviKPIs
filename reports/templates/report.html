@@ -285,7 +285,6 @@ line-height: 1.1;
         </div>
        </div>
 
-      <!-- SECTION 1: VPC / CVPC -->
       {% if has_vpc %}
       <div class="section">
         <div class="section-title" >VPC / CVPC</div>
@@ -324,7 +323,6 @@ line-height: 1.1;
       </div>
       {% endif %}
 
-      <!-- SECTION 2 : BOG Totaux par technicien (heures toutes zones) -->
       {% if has_bog %}
       <div class="section">
         <div class="section-title">BOG</div>
@@ -363,7 +361,6 @@ line-height: 1.1;
           >
             {% if extraction_date %} Extraction du {{ extraction_date }} {% else%} Répartition horaire par zone {% endif %}
           </div>
-          <!-- Tableau des zones au format horizontal (compact) -->
           <div class="compact-table-wrapper">
             <table class="zone-table">
               <thead>
@@ -385,7 +382,6 @@ line-height: 1.1;
             </table>
           </div>
 
-          <!-- Histogramme généré (si fourni) -->
           {% if histogram_base64 %}
           <div class="histogram-box">
             <div class="histogram-caption">
@@ -408,7 +404,6 @@ line-height: 1.1;
       </div>
       {% endif %}
 
-      <!-- SECTION 3 : Actions en Retard par Employé (criticité) -->
       {% if has_overdue %}
       <div class="section">
         <div class="section-title">Actions Overdue</div>
@@ -448,7 +443,6 @@ line-height: 1.1;
       </div>
       {% endif %}
 
-      <!-- SECTION 4 : Situations Dangereuses -->
       {% if has_std %}
       <div class="section">
         <div class="section-title" >Situations dangereuses</div>
