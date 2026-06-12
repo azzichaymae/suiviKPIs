@@ -61,11 +61,27 @@ def validate_required_columns(df, file_label, required_cols, ignore_cols=None):
                     alerts.append(f"⚠️ {file_label} : Champ vide dans la colonne '{col}' (ligne {idx+2})")
     return alerts
 
+def check_required_columns(df, file_label, required_cols):
+    """
+    Check if all required columns exist in the DataFrame.
+    Returns a list of error messages for missing columns.
+    If columns are missing, returns the errors and skips further processing.
+    """
+    errors = []
+    df_columns = [c.strip() for c in df.columns.tolist()]
+    for col in required_cols:
+        if col not in df_columns:
+            errors.append(f"❌ {file_label} : Colonne obligatoire manquante '{col}'")
+    return errors
+
 def upload_excel(request):
     alerts = []
 
     reporter_stats, bog_stats, zone_stats, employee_stats = {}, {}, {}, {}
     histogram_base64 = None
+    extraction_date = None
+    employee_actions = {}
+    grouped = {}
 
     if request.method == "POST":
         Sdate = request.POST.get("date_from")
@@ -77,129 +93,155 @@ def upload_excel(request):
         std_file = request.FILES.get("std_file")
 
         # --- VPC/CVPC ---
-        if vpc_file:
+        if vpc_file and vpc_file.name:
             df_vpc = pd.read_excel(vpc_file)
             df_vpc.columns = df_vpc.columns.str.strip()
-            alerts.extend(validate_required_columns(df_vpc, "VPC", ["VPC rapporté par", "Type de VPC effectué"]))
-            df_vpc["ReporterName"] = df_vpc["VPC rapporté par"].str.split(",").str[0:2].str.join(",")
 
-            for reporter in df_vpc["ReporterName"].unique():
-                sub_df = df_vpc[df_vpc["ReporterName"] == reporter]
-                vpc_count = (sub_df["Type de VPC effectué"] == "Axé sur le sujet").sum()
-                cvpc_count = (sub_df["Type de VPC effectué"] == "Critical VPC").sum()
-                reporter_stats[reporter] = {"VPC": vpc_count, "cVPC": cvpc_count}
+            # Check required columns exist first
+            missing = check_required_columns(df_vpc, "VPC", ["VPC rapporté par", "Type de VPC effectué"])
+            if missing:
+                alerts.extend(missing)
+            else:
+                alerts.extend(validate_required_columns(df_vpc, "VPC", ["VPC rapporté par", "Type de VPC effectué"]))
+                df_vpc["ReporterName"] = df_vpc["VPC rapporté par"].str.split(",").str[0:2].str.join(",")
+
+                for reporter in df_vpc["ReporterName"].unique():
+                    sub_df = df_vpc[df_vpc["ReporterName"] == reporter]
+                    vpc_count = (sub_df["Type de VPC effectué"] == "Axé sur le sujet").sum()
+                    cvpc_count = (sub_df["Type de VPC effectué"] == "Critical VPC").sum()
+                    reporter_stats[reporter] = {"VPC": vpc_count, "cVPC": cvpc_count}
 
         # --- BOG ---
-        if bog_file:
+        if bog_file and bog_file.name:
             bog_filename = bog_file.name
             extraction_date = extract_date_from_filename(bog_filename)
             df_bog = pd.read_excel(bog_file)
             df_bog.columns = df_bog.columns.str.strip()
-            alerts.extend(validate_required_columns(df_bog, "BOG", ["User", "TotalTime", "Zone", "TourValidStatus"]))
-            df_bog = df_bog[df_bog["TourValidStatus"] == "valid"]
 
-            df_bog["TotalHours"] = df_bog["TotalTime"].apply(parse_total_time)
+            # Check required columns exist first
+            missing = check_required_columns(df_bog, "BOG", ["User", "TotalTime", "Zone", "TourValidStatus"])
+            if missing:
+                alerts.extend(missing)
+            else:
+                alerts.extend(validate_required_columns(df_bog, "BOG", ["User", "TotalTime", "Zone", "TourValidStatus"]))
+                df_bog = df_bog[df_bog["TourValidStatus"] == "valid"]
 
-            bog_stats = df_bog.groupby("User")["TotalHours"].sum().to_dict()
+                df_bog["TotalHours"] = df_bog["TotalTime"].apply(parse_total_time)
 
-            df_bog["ZoneNumber"] = df_bog["Zone"].str.extract(r'(\d+)').astype(int)
-            zone_stats = dict(sorted(df_bog.groupby("ZoneNumber")["TotalHours"].sum().to_dict().items()))
+                bog_stats = df_bog.groupby("User")["TotalHours"].sum().to_dict()
 
-                        # --- Create histogram ---
-            plt.figure(figsize=(6,4))
+                df_bog["ZoneNumber"] = df_bog["Zone"].str.extract(r'(\d+)').astype(int)
+                zone_stats = dict(sorted(df_bog.groupby("ZoneNumber")["TotalHours"].sum().to_dict().items()))
 
-            zone_labels = [f"Zone {z}" for z in zone_stats.keys()]
-            zone_values = list(zone_stats.values())
+                # --- Create histogram ---
+                plt.figure(figsize=(6,4))
 
-            # Excel-like bar style
-            plt.bar(zone_labels, zone_values, color="#4472c4", width=0.4, edgecolor="#4472c4")
+                zone_labels = [f"Zone {z}" for z in zone_stats.keys()]
+                zone_values = list(zone_stats.values())
 
-            # Titles and labels
-            plt.title("Nombre d'heures passées dans chaque zone", fontsize=12)
-            plt.xlabel("")
-            plt.ylabel("")
-            plt.xticks(rotation=45, ha="right", fontsize=10)
-            plt.yticks(fontsize=10)
+                # Excel-like bar style
+                plt.bar(zone_labels, zone_values, color="#4472c4", width=0.4, edgecolor="#4472c4")
 
-            # Add gridlines similar to Excel
-            plt.grid(axis="y", color="#d9d9d9", linestyle="-", linewidth=0.8)
+                # Titles and labels
+                plt.title("Nombre d\'heures passées dans chaque zone", fontsize=12)
+                plt.xlabel("")
+                plt.ylabel("")
+                plt.xticks(rotation=45, ha="right", fontsize=10)
+                plt.yticks(fontsize=10)
 
-            # Remove top and right borders
-            for spine in ["top", "right"]:
-                plt.gca().spines[spine].set_visible(False)
+                # Add gridlines similar to Excel
+                plt.grid(axis="y", color="#d9d9d9", linestyle="-", linewidth=0.8)
 
-            plt.tight_layout()
+                # Remove top and right borders
+                for spine in ["top", "right"]:
+                    plt.gca().spines[spine].set_visible(False)
 
-            buf = io.BytesIO()
-            plt.savefig(buf, format="png")
-            buf.seek(0)
-            histogram_base64 = base64.b64encode(buf.read()).decode("utf-8")
-            buf.close()
+                plt.tight_layout()
+
+                buf = io.BytesIO()
+                plt.savefig(buf, format="png")
+                buf.seek(0)
+                histogram_base64 = base64.b64encode(buf.read()).decode("utf-8")
+                buf.close()
 
 
         # --- Overdue Actions ---
-        if overdue_file:
+        if overdue_file and overdue_file.name:
             df_overdue = pd.read_excel(overdue_file)
             df_overdue.columns = df_overdue.columns.str.strip()
-            alerts.extend(validate_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"]))
 
-            # Clean employee names
-            df_overdue["Employee"] = df_overdue["Assigned To"].str.split(",").str[0:2].apply(
-                lambda x: " ".join([p.strip() for p in x if p.strip()])
-            )
+            # Check required columns exist first
+            missing = check_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"])
+            if missing:
+                alerts.extend(missing)
+            else:
+                alerts.extend(validate_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"]))
 
-            # Build dictionary: { employee: [ { "summary": ..., "priority": ... }, ... ] }
-            employee_actions = {}
+                # Clean employee names
+                df_overdue["Employee"] = df_overdue["Assigned To"].str.split(",").str[0:2].apply(
+                    lambda x: " ".join([p.strip() for p in x if p.strip()])
+                )
 
-            for _, row in df_overdue.iterrows():
-                emp = row["Employee"]
-                summary = row["Action Summary"]
-                priority = row["Priority"]
+                # Build dictionary: { employee: [ { "summary": ..., "priority": ... }, ... ] }
+                employee_actions = {}
 
-                if emp not in employee_actions:
-                    employee_actions[emp] = []
-                
-                employee_actions[emp].append({"summary": summary, "priority": priority})
-        
-        if std_file:
+                for _, row in df_overdue.iterrows():
+                    emp = row["Employee"]
+                    summary = row["Action Summary"]
+                    priority = row["Priority"]
+
+                    if emp not in employee_actions:
+                        employee_actions[emp] = []
+
+                    employee_actions[emp].append({"summary": summary, "priority": priority})
+
+        # --- STD (Situations Dangereuses) ---
+        if std_file and std_file.name:
             df_std = pd.read_excel(std_file)
             df_std.columns = df_std.columns.str.strip()
-            alerts.extend(validate_required_columns(
-            df_std,
-            "STD",
-            ["Rapporté par", "Description du danger", "Statut"],
-            ignore_cols=["Assigné_nom"]  # allowed empty
-            ))
-            # Extract full name from "Rapporté par"
-            df_std["Rapporté_par_nom"] = df_std["Rapporté par"].str.split(",").str[0:2].str.join(" ").str.strip()
 
-            # Extract full name from "Actions" (the 4th element in the comma split is the name)
-            df_std["Assigné_nom"] = (
-                df_std["Actions"]
-                .fillna("")                     # replace NaN with empty string
-                .str.split(",")
-                .str[2:4]
-                .str.join(" ")
-                .str.strip()
-            )
+            # Check required columns exist first
+            missing = check_required_columns(df_std, "STD", ["Rapporté par", "Description du danger", "Statut", "Actions"])
+            if missing:
+                alerts.extend(missing)
+            else:
+                alerts.extend(validate_required_columns(
+                    df_std,
+                    "STD",
+                    ["Rapporté par", "Description du danger", "Statut"],
+                    ignore_cols=["Assigné_nom"]  # allowed empty
+                ))
 
-            # Group by employee
-            grouped = {}
-            for _, row in df_std.iterrows():
-                emp = row["Rapporté_par_nom"]
-                if emp not in grouped:
-                    grouped[emp] = []
-                desc = row["Description du danger"]
-                if pd.isna(desc):  
-                    desc = ""
-                    print(f"Warning: Missing description for employee {emp} in row {_}")
-                    
-                grouped[emp].append({
-                    "description": desc,
-                    "assigned_to": row["Assigné_nom"],
-                    "status": row["Statut"]
-                })
-     
+                # Extract full name from "Rapporté par"
+                df_std["Rapporté_par_nom"] = df_std["Rapporté par"].str.split(",").str[0:2].str.join(" ").str.strip()
+
+                # Extract full name from "Actions" (the 4th element in the comma split is the name)
+                df_std["Assigné_nom"] = (
+                    df_std["Actions"]
+                    .fillna("")                     # replace NaN with empty string
+                    .str.split(",")
+                    .str[2:4]
+                    .str.join(" ")
+                    .str.strip()
+                )
+
+                # Group by employee
+                grouped = {}
+                for _, row in df_std.iterrows():
+                    emp = row["Rapporté_par_nom"]
+                    if emp not in grouped:
+                        grouped[emp] = []
+                    desc = row["Description du danger"]
+                    if pd.isna(desc):  
+                        desc = ""
+                        print(f"Warning: Missing description for employee {emp} in row {_}")
+
+                    grouped[emp].append({
+                        "description": desc,
+                        "assigned_to": row["Assigné_nom"],
+                        "status": row["Statut"]
+                    })
+
         if alerts:
             # Render an error page instead of PDF
             return render(request, "upload_form.html", {"alerts": alerts})

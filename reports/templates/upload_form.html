@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
+  {% load static %}
   <title>Suivi hebdomadaire des KPIs</title>
+ <link rel="icon"  href="{% static 'favicon.ico' %}">
   <style>
     * {
       margin: 0;
@@ -171,16 +173,16 @@
 
         <div class="file-section">
           <label for="vpc_file">VPC/CVPC Excel:</label>
-          <input type="file" name="file_vpc" id="vpc_file" required><br>
+          <input type="file" name="file_vpc" id="vpc_file" ><br>
 
           <label for="bog_file">BOG Excel:</label>
-          <input type="file" name="file_bog" id="bog_file" required><br>
+          <input type="file" name="file_bog" id="bog_file" ><br>
 
           <label for="overdue_file">Overdue Actions Excel:</label>
-          <input type="file" name="overdue_file" id="overdue_file" required><br>
+          <input type="file" name="overdue_file" id="overdue_file" ><br>
 
           <label for="std">Situations dangereuses Excel:</label>
-          <input type="file" name="std_file" id="std" required>
+          <input type="file" name="std_file" id="std" >
         </div>
 
         <div class="button-container">
