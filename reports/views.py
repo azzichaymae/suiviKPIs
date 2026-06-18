@@ -85,7 +85,6 @@ def upload_excel(request):
             df_vpc = pd.read_excel(vpc_file)
             df_vpc.columns = df_vpc.columns.str.strip()
 
-            # Check required columns exist first
             missing = check_required_columns(df_vpc, "VPC", ["VPC rapporté par", "Type de VPC effectué"])
             if missing:
                 alerts.extend(missing)
@@ -124,7 +123,6 @@ def upload_excel(request):
                 zone_labels = [f"Zone {z}" for z in zone_stats.keys()]
                 zone_values = list(zone_stats.values())
 
-                # Excel-like bar style
                 plt.bar(zone_labels, zone_values, color="#4472c4", width=0.4, edgecolor="#4472c4")
 
                 plt.title("Nombre d\'heures passées dans chaque zone", fontsize=12)
@@ -133,10 +131,8 @@ def upload_excel(request):
                 plt.xticks(rotation=45, ha="right", fontsize=10)
                 plt.yticks(fontsize=10)
 
-                # Add gridlines similar to Excel
                 plt.grid(axis="y", color="#d9d9d9", linestyle="-", linewidth=0.8)
 
-                # Remove top and right borders
                 for spine in ["top", "right"]:
                     plt.gca().spines[spine].set_visible(False)
 
@@ -194,7 +190,7 @@ def upload_excel(request):
 
                 df_std["Assigné_nom"] = (
                     df_std["Actions"]
-                    .fillna("")                     # replace NaN with empty string
+                    .fillna("")                  
                     .str.split(",")
                     .str[2:4]
                     .str.join(" ")
