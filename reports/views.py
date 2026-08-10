@@ -9,6 +9,9 @@ import base64
 import re
 from datetime import datetime
 
+# Use non-interactive backend for matplotlib (prevents GUI thread warnings in Django)
+plt.switch_backend('Agg')
+
 def extract_date_from_filename(filename):
     match = re.search(r'(\d{4})(\d{2})(\d{2})', filename) 
     if match:
@@ -23,11 +26,26 @@ def extract_date_from_filename(filename):
     return None
 
 def parse_total_time(value):
+    """Convert hh:mm string or Excel time serial into decimal hours."""
     if pd.isna(value):
         return 0
+    # Excel time serial = fraction of a day (e.g. 0.3333 = 8 hours)
+    if isinstance(value, (int, float)):
+        if value < 1:
+            return round(value * 24, 2)
+        return round(value, 2)
     if isinstance(value, str):
-        h, m = map(int, value.split(":"))
-        return h + m/60
+        try:
+            h, m = map(int, value.split(":"))
+            return h + m/60
+        except ValueError:
+            try:
+                val = float(value)
+                if val < 1:
+                    return round(val * 24, 2)
+                return round(val, 2)
+            except ValueError:
+                return 0
     if hasattr(value, "hour") and hasattr(value, "minute"):
         return value.hour + value.minute/60
     return 0
@@ -72,6 +90,12 @@ def upload_excel(request):
     employee_actions = {}
     grouped = {}
 
+    # Flags for template conditional rendering
+    has_vpc = False
+    has_bog = False
+    has_overdue = False
+    has_std = False
+
     if request.method == "POST":
         Sdate = request.POST.get("date_from")
         Edate = request.POST.get("date_to")
@@ -89,6 +113,7 @@ def upload_excel(request):
             if missing:
                 alerts.extend(missing)
             else:
+                has_vpc = True
                 alerts.extend(validate_required_columns(df_vpc, "VPC", ["VPC rapporté par", "Type de VPC effectué"]))
                 df_vpc["ReporterName"] = df_vpc["VPC rapporté par"].str.split(",").str[0:2].str.join(",")
 
@@ -108,6 +133,7 @@ def upload_excel(request):
             if missing:
                 alerts.extend(missing)
             else:
+                has_bog = True
                 alerts.extend(validate_required_columns(df_bog, "BOG", ["User", "TotalTime", "Zone", "TourValidStatus"]))
                 df_bog = df_bog[df_bog["TourValidStatus"] == "valid"]
 
@@ -153,6 +179,7 @@ def upload_excel(request):
             if missing:
                 alerts.extend(missing)
             else:
+                has_overdue = True
                 alerts.extend(validate_required_columns(df_overdue, "Overdue", ["Assigned To", "Action Summary", "Priority"]))
 
                 df_overdue["Employee"] = df_overdue["Assigned To"].str.split(",").str[0:2].apply(
@@ -179,6 +206,7 @@ def upload_excel(request):
             if missing:
                 alerts.extend(missing)
             else:
+                has_std = True
                 alerts.extend(validate_required_columns(
                     df_std,
                     "STD",
@@ -227,7 +255,11 @@ def upload_excel(request):
                 "Sdate": format_french_date(Sdate),
                 "Edate": format_french_date(Edate),
                 "departement": departement,
-                "grouped": grouped
+                "grouped": grouped,
+                "has_vpc": has_vpc,
+                "has_bog": has_bog,
+                "has_overdue": has_overdue,
+                "has_std": has_std,
             })
 
             pdf_buffer = io.BytesIO()
@@ -235,6 +267,6 @@ def upload_excel(request):
 
             response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
             response["Content-Disposition"] = "attachment; filename=suivi hebdomadaire.pdf"
-        return response
+            return response
 
     return render(request, "upload_form.html")
